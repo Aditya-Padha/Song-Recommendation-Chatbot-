@@ -1,0 +1,153 @@
+<html>
+
+<head>
+    <title>Music Recommendation Chatbot</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" type="image/x-icon" href="icon.png">
+    <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <script src='./bundle.js'></script>
+</head>
+
+<body>
+    <div class="title">
+        <h1>Song Recommendation ChatBot</h1>
+    </div>
+    <div class="chatbox" id="chatbox">
+        <div class="conversation" id="conversation"></div>
+        <div class="input" id="input">
+            <input id="chatInput" type="text" placeholder="Type a song name to get recommendation">
+            <button id="button">Send</button>
+        </div>
+    </div>
+    <script>
+        const { containerBootstrap, Nlp, LangEn, fs } = window.nlpjs;
+        const chatbox = document.getElementById("chatbox");
+        const conversation = document.getElementById("conversation");
+        const input = document.getElementById("chatInput");
+        const button = document.getElementById("button");
+        const botName = "ChatBot";
+
+        function createMessage(text, url, sender) {
+            const message = document.createElement("div");
+            message.style.padding = "3px";
+            message.classList.add("message");
+            message.classList.add(sender);
+            message.textContent = text;
+            message.style.fontStyle = "bold"; // Apply italic font style
+            conversation.appendChild(message); // Append message to conversation
+            conversation.scrollTop = conversation.scrollHeight;
+        }
+
+        function onIntent(nlp, input) {
+            console.log(input);
+            if (input.intent === 'greetings.hello') {
+                const hours = new Date().getHours();
+                const output = input;
+                if (hours < 12) {
+                    output.answer = 'Good morning!';
+                } else if (hours < 17) {
+                    output.answer = 'Good afternoon!';
+                } else {
+                    output.answer = 'Good evening!';
+                }
+                return output;
+            }
+            if (input.intent === 'None') {
+                const output = input;
+                fetch(`https://adityap123.pythonanywhere.com/song?title=${input.utterance}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        console.log(data);
+                        let tracks;
+                        if (data.recommendations) {
+                            tracks = data.recommendations;
+                            //createMessage(`${botName}: Here are some similar songs:`, "bot");
+                            tracks.forEach(track => {
+                                createMessage(`${track.track_name} by ${track.artist_name}`, "bot");
+                            });
+                            output.answer = 'Done';
+                            return output;
+                        } else if (data.suggestions) {
+                            tracks = data.suggestions;
+                            createMessage(`${botName}: Could not find the song in database, but here are some suggestions:`, "bot");
+                            tracks.forEach(track => {
+                                createMessage(`${track}`, "bot");
+                            });
+                            output.answer = 'Done';
+                            return output;
+                        }
+                    }
+                    )
+            }
+            if (input.intent === 'Recommendation') {
+                fetch(`https://adityap123.pythonanywhere.com/song?title=none`)
+                    .then(response => response.json())
+                    .then(data => {
+                        console.log(data);
+                        let tracks;
+                        if (data.suggestions) {
+                            tracks = data.suggestions;
+                            tracks.forEach(track => {
+                                createMessage(`${track}`, "bot");
+                            });
+                        }
+                    })
+            }
+            return input;
+        }
+
+
+        const setupNLP = async corpus => {
+            const container = containerBootstrap();
+            container.register('fs', fs);
+            container.use(Nlp);
+            container.use(LangEn);
+            const nlp = container.get('nlp');
+            nlp.onIntent = onIntent;
+            nlp.settings.autoSave = false;
+            await nlp.addCorpus(corpus);
+            nlp.train();
+            return nlp;
+        };
+
+        const onChatSubmit = nlp => async event => {
+            event.preventDefault();
+            const chat = document.getElementById('chat');
+            const chatInput = document.getElementById('chatInput');
+
+            if (input.value.trim() === "") {
+                input.value = "";
+                createMessage(`Chatbot: Write a song and I'll recommend you some similar ones!`);
+            }
+
+            else if (chatInput.value == "Clear" || chatInput.value == "clear") {
+                conversation.replaceChildren();
+                input.value = "";
+            }
+            else {
+                createMessage(`You: ${chatInput.value}`);
+                const response = await nlp.process('en', chatInput.value);
+                createMessage(`Chatbot: ${response.answer}`);
+                chatInput.value = '';
+            }
+        };
+
+        const keyPress = nlp => async event => {
+            if (event.keyCode === 13) {
+                event.preventDefault();
+                button.click();
+            }
+        };
+
+
+        (async () => {
+            const nlp = await setupNLP('https://gist.githubusercontent.com/AbhashK1/0bd66da11e458efbd18f0aa8fa613767/raw/33eaa7be9d7ff8854a940d848d62d2cb82dbd131/gistfile1.txt');
+            const chatForm = document.getElementById('button');
+            chatForm.addEventListener('click', onChatSubmit(nlp));
+            input.addEventListener('keypress', keyPress(nlp));
+        })();
+    </script>
+</body>
+
+</html>
